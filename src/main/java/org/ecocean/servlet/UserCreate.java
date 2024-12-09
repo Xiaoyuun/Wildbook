@@ -114,56 +114,54 @@ public class UserCreate extends HttpServlet {
                         }
                     }
                     // here handle all of the other User fields (e.g., email address, etc.)
-                    if ((request.getParameter("username") != null) &&
-                        (!request.getParameter("username").trim().equals(""))) {
-                        newUser.setUsername(request.getParameter("username").trim());
-                    } else if (isEdit && (request.getParameter("username") != null) &&
-                        (request.getParameter("username").trim().equals(""))) {
+
+                    username = request.getParameter("username");
+                    if (username != null && !username.trim().equals("")) {
+                        // sanitize username to escape special characters
+                        // avoid issues with browser rendering or script injection attacks
+                        username = StringEscapeUtils.escapeHtml4(username.trim());
+                        // simple regex to allow alphanumeric characters and some symbols
+                        if (username.matches("[a-zA-Z0-9_\\-]+")) {
+                            System.out.println("Username received: " + username);
+                            newUser.setUsername(username);
+                        } else {
+                            addErrorMessage(null, "Invalid username: contains unsupported characters.");
+                            return;
+                        }
+                    } else if (isEdit && (username != null) && username.trim().equals("")) {
                         newUser.setUsername(null);
                     }
+
                     if ((request.getParameter("fullName") != null) &&
-                        (!request.getParameter("fullName").trim().equals(""))) {
                         newUser.setFullName(request.getParameter("fullName").trim());
                     } else if (isEdit && (request.getParameter("fullName") != null) &&
-                        (request.getParameter("fullName").trim().equals(""))) {
                         newUser.setFullName(null);
                     }
                     if (request.getParameter("receiveEmails") != null) {
                         newUser.setReceiveEmails(true);
-                    } else { newUser.setReceiveEmails(false); }
                     if ((request.getParameter("emailAddress") != null) &&
-                        (!request.getParameter("emailAddress").trim().equals(""))) {
                         newUser.setEmailAddress(request.getParameter("emailAddress").trim());
                     } else if (isEdit && (request.getParameter("emailAddress") != null) &&
-                        (request.getParameter("emailAddress").trim().equals(""))) {
                         newUser.setEmailAddress(null);
                     }
                     if ((request.getParameter("affiliation") != null) &&
-                        (!request.getParameter("affiliation").trim().equals(""))) {
                         newUser.setAffiliation(request.getParameter("affiliation").trim());
                     } else if (isEdit && (request.getParameter("affiliation") != null) &&
-                        (request.getParameter("affiliation").trim().equals(""))) {
                         newUser.setAffiliation(null);
                     }
                     if ((request.getParameter("userProject") != null) &&
-                        (!request.getParameter("userProject").trim().equals(""))) {
                         newUser.setUserProject(request.getParameter("userProject").trim());
                     } else if (isEdit && (request.getParameter("userProject") != null) &&
-                        (request.getParameter("userProject").trim().equals(""))) {
                         newUser.setUserProject(null);
                     }
                     if ((request.getParameter("userStatement") != null) &&
-                        (!request.getParameter("userStatement").trim().equals(""))) {
                         newUser.setUserStatement(request.getParameter("userStatement").trim());
                     } else if (isEdit && (request.getParameter("userStatement") != null) &&
-                        (request.getParameter("userStatement").trim().equals(""))) {
                         newUser.setUserStatement(null);
                     }
                     if ((request.getParameter("userURL") != null) &&
-                        (!request.getParameter("userURL").trim().equals(""))) {
                         newUser.setUserURL(request.getParameter("userURL").trim());
                     } else if (isEdit && (request.getParameter("userURL") != null) &&
-                        (request.getParameter("userURL").trim().equals(""))) {
                         newUser.setUserURL(null);
                     }
                     newUser.RefreshDate();
@@ -191,13 +189,11 @@ public class UserCreate extends HttpServlet {
                                 if (!thisRole.trim().equals("")) {
                                     Role role = new Role();
                                     if (myShepherd.getRole(thisRole, username,
-                                        ("context" + d)) == null) {
                                         role.setRolename(thisRole);
                                         role.setUsername(username);
                                         role.setContext("context" + d);
                                         myShepherd.getPM().makePersistent(role);
                                         addedRoles += ("SEPARATORSTART" + roles[i] +
-                                            "SEPARATOREND");
                                         // System.out.println(addedRoles);
                                         myShepherd.commitDBTransaction();
                                         myShepherd.beginDBTransaction();
@@ -241,7 +237,6 @@ public class UserCreate extends HttpServlet {
                         }
                     } // end if orgs==null
 
-                    // OK - remove to no longer selected orgs by seeing what the requesting user could have requested but didn't.
 
                     // possible set the orgAdmin could have set
                     List<Organization> reqOrgs = new ArrayList<Organization>();
@@ -253,59 +248,47 @@ public class UserCreate extends HttpServlet {
                             reqOrgs = myShepherd.getAllOrganizationsForUser(user);
                         }
                     }
-                    // whittle down to those entries where the User could have been added by reqUser but wasn't intentionally
                     reqOrgs.removeAll(selectedOrgs);
                     for (Organization rOrg : reqOrgs) {
-                        // for each org the requesting user could have selected for this user but didn't, remove this user from that org
                         rOrg.removeMember(newUser);
                     }
                     // output success statement
                     out.println(ServletUtilities.getHeader(request));
                     if (createThisUser) {
                         out.println("<strong>Success:</strong> User '" +
-                            StringEscapeUtils.escapeHtml4(username) +
                             "' was successfully created with added roles: <ul>" +
                             addedRoles.replaceAll("SEPARATORSTART",
                             "<li>").replaceAll("SEPARATOREND", "</li>") + "</ul>");
                     } else {
                         out.println("<strong>Success:</strong> User '" +
-                            StringEscapeUtils.escapeHtml4(username) +
                             "' was successfully updated and has assigned roles: <ul>" +
                             addedRoles.replaceAll("SEPARATORSTART",
                             "<li>").replaceAll("SEPARATOREND", "</li>") + "</ul>");
                     }
                     out.println("<p><a href=\"" + request.getScheme() + "://" +
-                        CommonConfiguration.getURLLocation(request) +
                         "/appadmin/users.jsp?context=context0" +
                         "\">Return to User Administration" + "</a></p>\n");
                     out.println(ServletUtilities.getFooter(context));
 
                     myShepherd.updateDBTransaction();
 
-                    // now that the new or updated user data is persisted, if the username changed, let's consolidate all of the stuff that belonged
                     // to the *old* username (if exists) into the new version of the user by consolidating a user with the username of
                     // originalUsername into the newUser. This action both exploits and closes (in the case of edited usernames, at least) the
                     // security flaw that a user can be created and inherit already-existing assets if it happens to have the username of the assets'
                     // [previous] owner.
                     User tempUserWithOriginalUserName = null;
                     if (originalUsername != null && !originalUsername.equals("") &&
-                        newUser.getUsername() != null &&
                         !newUser.getUsername().equals(originalUsername)) {
                         try {
                             String tmpUsrSalt = ServletUtilities.getSalt().toHex();
-                            String tmpUsr1Password = "tomcat123"; // it does not matter; this user will be gone very soon
                             String tmpUsr1HashedPassword = ServletUtilities.hashAndSaltPassword(
-                                tmpUsr1Password, tmpUsrSalt);
                             tempUserWithOriginalUserName = new User(originalUsername,
-                                tmpUsr1HashedPassword, tmpUsrSalt);                                     // this user is now magically associated with
                                                                                                         // encounters with submitterId of
                                                                                                         // originalUsername
                             myShepherd.getPM().makePersistent(tempUserWithOriginalUserName);
                             UserConsolidate.consolidateUserForUserEdit(myShepherd, newUser,
-                                tempUserWithOriginalUserName);
                         } catch (Exception e) {
                             System.out.println(
-                                "error while trying to assign the original user's data to the user account with the new edits");
                             e.printStackTrace();
                         }
                     }
@@ -321,9 +304,7 @@ public class UserCreate extends HttpServlet {
                 out.println(ServletUtilities.getHeader(request));
                 response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                 out.println(
-                    "<strong>Failure:</strong> User was NOT successfully created. Your passwords did not match.");
                 out.println("<p><a href=\"" + request.getScheme() + "://" +
-                    CommonConfiguration.getURLLocation(request) +
                     "/appadmin/users.jsp?context=context0" + "\">Return to User Administration" +
                     "</a></p>\n");
                 out.println(ServletUtilities.getFooter(context));
@@ -333,9 +314,7 @@ public class UserCreate extends HttpServlet {
             out.println(ServletUtilities.getHeader(request));
             response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             out.println(
-                "<strong>Failure:</strong> User was NOT successfully created. I did not have all of the username and password information I needed.");
             out.println("<p><a href=\"" + request.getScheme() + "://" +
-                CommonConfiguration.getURLLocation(request) +
                 "/appadmin/users.jsp?context=context0" + "\">Return to User Administration" +
                 "</a></p>\n");
             out.println(ServletUtilities.getFooter(context));
